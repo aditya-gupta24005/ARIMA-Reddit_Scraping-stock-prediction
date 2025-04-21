@@ -8,6 +8,11 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 import nltk
+import requests
+from time import sleep
+
+# Add a 2-second delay between requests
+sleep(2)
 
 # Download required NLTK data
 nltk.download('vader_lexicon')
@@ -126,11 +131,23 @@ def main():
     
     # Get user input
     stock_symbol = input("Enter stock symbol (e.g., TSLA): ").upper()
-    stock=yf.Ticker(stock_symbol)
+    
+    for _ in range(3):  # Retry up to 3 times
+        try:
+            stock = yf.Ticker(stock_symbol)
+            data = stock.info
+            break
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                print("Rate limit hit. Retrying...")
+                sleep(5)  # Wait 5 seconds before retrying
+            else:
+                raise
+
     if not stock.info:
         print("Invalid stock symbol. Please try again.")
         return
-    company_name= stock.info["longName"]
+    company_name = stock.info["longName"]
     print(f"Company Name: {company_name}")
     
     try:
@@ -140,7 +157,7 @@ def main():
         print(prediction)
         
         # Show some sample posts
-        posts = analyzer.get_reddit_posts(company_name, limit=5)
+        posts = analyzer.get_reddit_posts(stock_symbol, limit=5)
         print("\nRecent Reddit posts about this stock:")
         for _, post in posts.iterrows():
             print(f"\nTitle: {post['title']}")
@@ -153,4 +170,4 @@ def main():
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    main() 
+    main()
