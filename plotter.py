@@ -1,192 +1,89 @@
+# plotter.py
+
 import matplotlib
-matplotlib.use("Agg")  # Non‑interactive backend for Streamlit/CI
-
+matplotlib.use("TkAgg")   # interactive backend for displaying plots
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
-import os
-from typing import Optional
+from datetime import datetime
 
-# -----------------------------------------------------------------------------
-# Visualization helper class
-# -----------------------------------------------------------------------------
+
 class SentimentPlotter:
-    """
-    Centralized matplotlib/seaborn helper for sentiment & price visualizations.
-    """
+    def __init__(self):
+        # Default figure size for all plots
+        self.figsize = (12, 6)
 
-    def __init__(self, figsize: tuple[int, int] = (12, 8)) -> None:
-        # Use seaborn default theme instead of deprecated plt.style.use("seaborn")
-        sns.set_theme(style="darkgrid")
-        self.figsize = figsize
-
-    # 1. Sentiment time series ------------------------------------------------------------------
-    def plot_sentiment_trend(
-        self,
-        sentiment_data: pd.Series,
-        stock_data: Optional[pd.DataFrame] = None,
-        title: str = "Sentiment Analysis",
-    ) -> plt.Figure:
+    def plot_sentiment_trend(self, sentiment_series, stock_df=None, title="Sentiment Trend"):
         """
-        Time‑series plot of sentiment scores with optional stock‑price overlay.
+        Plot daily sentiment scores over time.
+        If you pass a stock_df with a 'Close' column, it will overlay the closing price.
         """
-        if sentiment_data.empty:
-            fig, ax = plt.subplots(figsize=self.figsize)
-            ax.text(
-                0.5,
-                0.5,
-                "No sentiment data available",
-                ha="center",
-                va="center",
-                fontsize=12,
-            )
-            ax.set_axis_off()
-            fig.suptitle(title)
-            return fig
-
         fig, ax1 = plt.subplots(figsize=self.figsize)
+        ax1.plot(sentiment_series.index, sentiment_series.values,
+                 label="Sentiment", linewidth=2)
+        ax1.set_ylabel("Sentiment Score")
+        ax1.set_title(title)
+        ax1.grid(True)
 
-        # Plot sentiment
-        color_sent = "tab:blue"
-        ax1.set_xlabel("Date")
-        ax1.set_ylabel("Sentiment Score", color=color_sent)
-        ax1.plot(sentiment_data.index, sentiment_data.values, color=color_sent, label="Sentiment")
-        ax1.tick_params(axis="y", labelcolor=color_sent)
-
-        # Optional price overlay
-        if stock_data is not None and not stock_data.empty:
+        if stock_df is not None and "Close" in stock_df:
             ax2 = ax1.twinx()
-            color_price = "tab:red"
-            ax2.set_ylabel("Stock Price", color=color_price)
-            ax2.plot(stock_data.index, stock_data["Close"], color=color_price, label="Close Price")
-            ax2.tick_params(axis="y", labelcolor=color_price)
+            ax2.plot(stock_df.index, stock_df["Close"],
+                     label="Close Price", alpha=0.7)
+            ax2.set_ylabel("Stock Close Price")
+            # Combine legends
+            h1, l1 = ax1.get_legend_handles_labels()
+            h2, l2 = ax2.get_legend_handles_labels()
+            ax1.legend(h1 + h2, l1 + l2, loc="upper left")
 
-        fig.suptitle(title)
-        fig.tight_layout()
         return fig
 
-    # 2. Sentiment distribution -----------------------------------------------------------------
-    def plot_sentiment_distribution(
-        self, sentiment_scores: np.ndarray | list, title: str = "Sentiment Distribution"
-    ) -> plt.Figure:
+    def plot_sentiment_distribution(self, sentiment_values, title="Sentiment Distribution"):
         """
-        Histogram + KDE for sentiment score distribution.
+        Show a histogram of sentiment scores to see their spread.
         """
         fig, ax = plt.subplots(figsize=self.figsize)
-        if len(sentiment_scores) > 0:
-            sns.histplot(sentiment_scores, kde=True, ax=ax)
-            ax.set_xlabel("Sentiment Score")
-            ax.set_ylabel("Frequency")
-        else:
-            ax.text(
-                0.5,
-                0.5,
-                "No sentiment data available",
-                ha="center",
-                va="center",
-                fontsize=12,
-            )
-            ax.set_axis_off()
-
-        fig.suptitle(title)
-        fig.tight_layout()
+        ax.hist(sentiment_values, bins=20, edgecolor="black")
+        ax.set_xlabel("Sentiment Score")
+        ax.set_ylabel("Frequency")
+        ax.set_title(title)
+        ax.grid(True)
         return fig
 
-    # 3. Post quality distribution --------------------------------------------------------------
-    def plot_quality_scores(
-        self, posts_df: pd.DataFrame, title: str = "Post Quality Distribution"
-    ) -> plt.Figure:
-        """
-        Histogram of quality scores stored in `posts_df['quality_score']`.
-        """
-        fig, ax = plt.subplots(figsize=self.figsize)
-        if "quality_score" in posts_df.columns and not posts_df.empty:
-            sns.histplot(posts_df["quality_score"], kde=True, ax=ax)
-            ax.set_xlabel("Quality Score")
-            ax.set_ylabel("Frequency")
-        else:
-            ax.text(
-                0.5,
-                0.5,
-                "No quality score data available",
-                ha="center",
-                va="center",
-                fontsize=12,
-            )
-            ax.set_axis_off()
-
-        fig.suptitle(title)
-        fig.tight_layout()
-        return fig
-
-    # 4. Sentiment‑vs‑price scatter -------------------------------------------------------------
-    def plot_sentiment_vs_price(
-        self,
-        sentiment_data: pd.Series | np.ndarray | list,
-        stock_data: pd.DataFrame,
-        title: str = "Sentiment vs Stock Price",
-    ) -> plt.Figure:
-        """
-        Scatterplot of sentiment scores against closing price with optional trend line.
-        """
-        fig, ax = plt.subplots(figsize=self.figsize)
-
-        if len(sentiment_data) > 0 and not stock_data.empty:
-            ax.scatter(sentiment_data, stock_data["Close"], alpha=0.6, s=40)
-
-            # Trend line
-            try:
-                z = np.polyfit(sentiment_data, stock_data["Close"], 1)
-                p = np.poly1d(z)
-                ax.plot(sentiment_data, p(sentiment_data), "r--")
-            except Exception as exc:
-                # Fail silently but log message
-                print(f"[plot_sentiment_vs_price] trend‑line failed: {exc}")
-
-            ax.set_xlabel("Sentiment Score")
-            ax.set_ylabel("Stock Price")
-        else:
-            ax.text(
-                0.5,
-                0.5,
-                "Insufficient data for correlation plot",
-                ha="center",
-                va="center",
-                fontsize=12,
-            )
-            ax.set_axis_off()
-
-        fig.suptitle(title)
-        fig.tight_layout()
-        return fig
-
-    # 5. Save utility ---------------------------------------------------------------------------
-    def save_plot(self, fig: plt.Figure, filename: str) -> None:
-        """
-        Persist a matplotlib Figure to disk, creating parent dirs as needed.
-        """
-        try:
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-            fig.savefig(filename, bbox_inches="tight")
-        finally:
-            plt.close(fig)
-
-
-# -----------------------------------------------------------------------------
-# Backwards‑compatibility façade
-# -----------------------------------------------------------------------------
-# Many callers (e.g. streamlit_app.py) still import the legacy
-# `plot_sentiment_vs_price` function directly.  Provide a thin wrapper so we
-# don't break them.
-_plotter_singleton = SentimentPlotter()
-
-def plot_sentiment_vs_price(
-    sentiment_data: pd.Series | np.ndarray | list,
-    stock_data: pd.DataFrame,
-    title: str = "Sentiment vs Stock Price",
-) -> plt.Figure:
-    """
-    Wrapper delegating to SentimentPlotter.plot_sentiment_vs_price.
-    """
-    return _plotter_singleton.plot_sentiment_vs_price(sentiment_data, stock_data, title)
+    def plot_price_forecast(self, historical, forecast, symbol):
+        """Plot historical prices and forecast."""
+        plt.figure(figsize=(12, 6))
+        
+        # Plot historical data
+        plt.plot(historical.index, historical, 
+                label='Historical Prices', 
+                color='blue',
+                linewidth=2)
+        
+        # Plot forecast
+        plt.plot(forecast.index, forecast, 
+                label='Forecast', 
+                color='red', 
+                linewidth=2)
+        
+        # Add vertical line at the last historical date
+        plt.axvline(x=historical.index[-1], 
+                   color='gray', 
+                   linestyle=':', 
+                   alpha=0.5, 
+                   label='Forecast Start')
+        
+        # Add today's date and format title
+        today = datetime.now().strftime('%Y-%m-%d')
+        plt.title(f'{symbol} Price Forecast\nAs of {today}')
+        plt.xlabel('Date')
+        plt.ylabel('Price ($)')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        
+        # Save the plot
+        outfile = f"{symbol}_6mo_5day.png"
+        plt.savefig(outfile)
+        
+        # Show the plot in a new window
+        plt.show()
+        
+        return plt.gcf()
