@@ -1,14 +1,14 @@
 # plotter.py
 
 import matplotlib
-matplotlib.use("TkAgg")   # interactive backend for displaying plots
+matplotlib.use("TkAgg")   # Use TkAgg backend for interactive plots
 import matplotlib.pyplot as plt
 from datetime import datetime
 
 
 class SentimentPlotter:
     def __init__(self):
-        # Default figure size for all plots
+        
         self.figsize = (12, 6)
 
     def plot_sentiment_trend(self, sentiment_series, stock_df=None, title="Sentiment Trend"):
@@ -79,9 +79,6 @@ class SentimentPlotter:
         plt.grid(True)
         plt.tight_layout()
         
-        # Save the plot
-        outfile = f"{symbol}_6mo_5day.png"
-        plt.savefig(outfile)
         
         # Show the plot in a new window
         plt.show()
